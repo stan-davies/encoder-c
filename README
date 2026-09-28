@@ -1,0 +1,5 @@
+Plan is to translate the python program into a functionally identical, but
+vastly more efficient and cool, C program.
+
+By 'the python program' I mean my other encoder that is written in python which
+is in a different repository.
