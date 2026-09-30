@@ -7,6 +7,11 @@
 
 #define SYMSZ   16
 
+struct keyval {
+        char           *key     ;       // Of length SYMSZ.
+        int             val     ;
+};
+
 static int read_raw(
         char           *fname   ,
         char          **raw
@@ -57,7 +62,7 @@ static int getsym(
         return strlen(*sym);
 }
                         
-static void scan_syms(
+static int scan_syms(
         char           *raw     ,
         char         ***syms
 ) {
@@ -71,7 +76,9 @@ static void scan_syms(
         free(sym);
         sym = NULL;
 
+        int l = *syms - base;
         *syms = base;
+        return l;
 }
 
 int main(
@@ -83,6 +90,8 @@ int main(
                 printf("Could not open file.\n");
         }
 
+        // In text editor, raw text would be passed so would start from here.
+
                 // Space for 16 strings.
         char **syms = calloc(16, sizeof(char *));
         for (int i = 0; i < 16; ++i) {
@@ -90,14 +99,37 @@ int main(
                 syms[i] = calloc(SYMSZ, sizeof(char));
         };
 
-        scan_syms(raw, &syms);
+        int symc = scan_syms(raw, &syms);
 
-        for (int i = 0; i < 16; ++i) {
-                printf("%d:\t'%s'\n", i, syms[i]);
+// Probably ought to be its own function.
+        // Repititions dictionary can have, at most, is same number of keys as
+        // there is words, i.e. case of no repititions.
+        struct keyval *repd = calloc(symc, sizeof(struct keyval));
+        int keys = 0;
+
+        for (int i = 0; i < symc; ++i) {
+                for (int k = 0; k < keys; ++k) {
+                        if (strcmp(syms[i], repd[k].key)) {
+                                continue;
+                        }
+                        repd[k].val++;
+                        goto next_word;
+                }
+
+                repd[keys].key = calloc(SYMSZ, sizeof(char));
+                strcpy(repd[keys].key, syms[i]);
+                repd[keys++].val = 1;   // Increment keys for next pair.
+next_word:      ;
         }
+////
+
+
+
 
 
         // Will deal with capitalisation later.
+        // Also leaving out filtering for now, get working for short text
+        // first.
 
 
         return 0;
@@ -106,13 +138,6 @@ int main(
 
 ////////////////////////////////////
 /*
-
-reps = {}
-for s in symbols:
-        if s.lower() in reps:
-                reps[s.lower()] += 1
-        else:
-                reps[s.lower()] = 1
 
 threes = [key for key in reps if len(key) == 3 and reps[key] >= 5]
 fours  = [key for key in reps if len(key) == 4 and reps[key] >= 3]
