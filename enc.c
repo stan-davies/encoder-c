@@ -1,28 +1,37 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define FALSE   0
+#define TRUE    1
+
+#define SYMSZ   16
 
 static int read_raw(
         char           *fname   ,
         char          **raw
 ) {
-        FILE *f = fopen(fname, 'r');
+        FILE *f = fopen(fname, "r");
         if (!f) {
                 return FALSE;
         }
 
         fseek(f, 0, SEEK_END);  // SEEK_END maybe not supported for binary files?
-        int ln = ftell(f);
+        int ln = ftell(f) + 1;  // +1 for '\0'
         rewind(f);
 
-        *raw = calloc(ln, sizeof(char));        // +1?
+        *raw = calloc(ln, sizeof(char));
         int i = 0;
+        char c;
         while (EOF != (c = fgetc(f))) {
                 (*raw)[i++] = c;
         }
-
-        // Add NULL terminator?
+        (*raw)[i] = '\0';
 
         fclose(f);
         f = NULL;
+
+        return ln;
 }
 
 static int getsym(
@@ -34,42 +43,35 @@ static int getsym(
 
         char *base = *sym;
 
-        while (c = raw[i++]) {  // i.e. while not 0, not null-terminator
+        while ((c = raw[i++])) {  // i.e. while not 0, not null-terminator
                 if (' ' == c) {
-                        ++i;
                         break;
                 } else if (c >= 'A' && c <= 'Z') {
                         *(*sym)++ = c + 32;
-                } else if (c >= 'a' && c <= 'z') {
+                } else if ((c >= 'a' && c <= 'z') || '-' == c) {
                         *(*sym)++ = c;
-                } else {        // Punctuation, what about '-'?
-                        ++i;
-                }
+                }       // All other punctuation and numbers ignored.
         }
         **sym = '\0';
         *sym = base;
-        return strlen(sym);
+        return strlen(*sym);
 }
                         
-
 static void scan_syms(
         char           *raw     ,
         char         ***syms
 ) {
         char **base = *syms;
+        char *sym = calloc(SYMSZ, sizeof(char));
 
-        char *sym = calloc(/*how much?*/);
-
-        while (getsym(raw, &sym)) {
-                *(*syms)++ = sym;       // Just putting one pointer in place of
-                                        // another? Need to do a strcpy?
-                                        // Test it.
+        while (getsym(raw, &sym)) {     // Returns strlen of sym so while >0.
+                strcpy(*(*syms)++, sym);
         }
 
         free(sym);
         sym = NULL;
 
-        *syms = *base;
+        *syms = base;
 }
 
 int main(
@@ -81,14 +83,29 @@ int main(
                 printf("Could not open file.\n");
         }
 
-        char **syms = calloc(/*...*/);
+                // Space for 16 strings.
+        char **syms = calloc(16, sizeof(char *));
+        for (int i = 0; i < 16; ++i) {
+                // Each string 16 characters max.
+                syms[i] = calloc(SYMSZ, sizeof(char));
+        };
+
         scan_syms(raw, &syms);
 
+        for (int i = 0; i < 16; ++i) {
+                printf("%d:\t'%s'\n", i, syms[i]);
+        }
 
-        // Maybe don't get rid of uppercase yet? Or do that bit later?
+
+        // Will deal with capitalisation later.
+
+
+        return 0;
+}
         
 
 ////////////////////////////////////
+/*
 
 reps = {}
 for s in symbols:
@@ -140,3 +157,4 @@ with open("enc.bin", "wb") as f:
                         wrt.append(ord(c).to_bytes(1))
 
         f.writelines(wrt)
+*/
