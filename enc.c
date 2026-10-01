@@ -12,6 +12,11 @@ struct keyval {
         int             val     ;
 };
 
+static struct keyval null_pair = {
+        .key    =       NULL    ,
+        .val    =       0
+};
+
 static int read_raw(
         char           *fname   ,
         char          **raw
@@ -121,6 +126,31 @@ int main(
                 repd[keys++].val = 1;   // Increment keys for next pair.
 next_word:      ;
         }
+
+        struct keyval *filt_repd = calloc(keys, sizeof(struct keyval));
+        int fkeys = 0;
+        for (int k = 0; k < keys; ++k) {
+                if (repd[k].val >= 3) {
+                        filt_repd[fkeys++] = repd[k];
+                        repd[k] = null_pair;
+                } else {
+                        free(repd[k].key);
+                        repd[k].key = NULL;
+                        repd[k] = null_pair;
+                }
+        }
+
+        free(repd);
+        repd = NULL;
+
+        for (int k = 0; k < fkeys; ++k) {
+                printf("got '%s'\n", filt_repd[k].key);
+        }
+
+        // Time to sort...
+        // So I think we want to create another dictionary of the same size,
+        // and populate it with symbols repeated at least... thrice?
+        // Then we work out how to put symbols in place afterwards.
 ////
 
 
