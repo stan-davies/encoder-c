@@ -127,6 +127,13 @@ int main(
 next_word:      ;
         }
 
+        for (int i = 0; i < symc; ++i) {
+                free(syms[i]);
+                syms[i] = NULL;
+        }
+        free(syms);
+        syms = NULL;
+
         struct keyval *filt_repd = calloc(keys, sizeof(struct keyval));
         int fkeys = 0;
         for (int k = 0; k < keys; ++k) {
@@ -147,10 +154,8 @@ next_word:      ;
                 printf("got '%s'\n", filt_repd[k].key);
         }
 
-        // Time to sort...
-        // So I think we want to create another dictionary of the same size,
-        // and populate it with symbols repeated at least... thrice?
-        // Then we work out how to put symbols in place afterwards.
+        // Time to substitute in...  I reckon we read through the text word by
+        // word, and either paste in or paste in the symbol.
 ////
 
 
@@ -161,6 +166,17 @@ next_word:      ;
         // Also leaving out filtering for now, get working for short text
         // first.
 
+
+        for (int k = 0; k < fkeys; ++k) {
+                free(filt_repd[k].key);
+                filt_repd[k].key = NULL;
+        }
+
+        free(filt_repd);
+        filt_repd = NULL;
+
+        free(raw);
+        raw = NULL;
 
         return 0;
 }
