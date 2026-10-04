@@ -7,6 +7,8 @@
 
 #define SYMSZ   16
 
+static int getsym_c = 0;
+
 struct keyval {
         char           *key     ;       // Of length SYMSZ.
         int             val     ;
@@ -44,16 +46,30 @@ static int read_raw(
         return ln;
 }
 
+static void out_txt(
+        char           *txt
+) {
+        FILE *f = fopen("enc.bin", "wb");
+        if (!f) {
+                printf("Could not open file to write.\n");
+                return;
+        }
+
+        // Don't like using strlen really.
+        fwrite(txt, sizeof(char), strlen(txt), f);
+
+        fclose(f);
+}
+
 static int getsym(
         char           *raw     ,
         char          **sym
 ) {
-        static int i = 0;       // Only used once per run.
         char c;
 
         char *base = *sym;
 
-        while ((c = raw[i++])) {  // i.e. while not 0, not null-terminator
+        while ((c = raw[getsym_c++])) {  // i.e. while not 0, not null-terminator
                 if (' ' == c) {
                         break;
                 } else if (c >= 'A' && c <= 'Z') {
@@ -66,7 +82,13 @@ static int getsym(
         *sym = base;
         return strlen(*sym);
 }
-                        
+
+static void reset_getsym(
+        void
+) {
+        getsym_c = 0;
+}
+
 static int scan_syms(
         char           *raw     ,
         char         ***syms
@@ -74,6 +96,7 @@ static int scan_syms(
         char **base = *syms;
         char *sym = calloc(SYMSZ, sizeof(char));
 
+        reset_getsym();
         while (getsym(raw, &sym)) {     // Returns strlen of sym so while >0.
                 strcpy(*(*syms)++, sym);
         }
@@ -150,14 +173,31 @@ next_word:      ;
         free(repd);
         repd = NULL;
 
-        for (int k = 0; k < fkeys; ++k) {
-                printf("got '%s'\n", filt_repd[k].key);
+        char *out = calloc(strlen(raw), sizeof(char)); // Probably need more than that for dictionary itself.
+        char *hd = out;
+        char *w = calloc(SYMSZ, sizeof(char));
+        reset_getsym();
+        while ((getsym(raw, &w))) {
+                for (int k = 0; k < fkeys; ++k) {
+                        if (strcmp(filt_repd[k].key, w)) {
+                                continue;
+                        }
+                        sprintf(hd, "%c%c ", 30, k + 1);
+                        hd += 3;
+                        goto cont;
+                }
+                sprintf(hd, "%s ", w);
+                hd += strlen(w) + 1;
+cont:           ;
         }
 
-        // Time to substitute in...  I reckon we read through the text word by
-        // word, and either paste in or paste in the symbol.
-////
+        free(w);
+        w = NULL;
 
+        out_txt(out);
+
+        free(out);
+        out = hd = NULL;
 
 
 
