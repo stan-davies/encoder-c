@@ -159,9 +159,11 @@ next_word:      ;
 
         struct keyval *filt_repd = calloc(keys, sizeof(struct keyval));
         int fkeys = 0;
+        int dlen = 0;
         for (int k = 0; k < keys; ++k) {
                 if (repd[k].val >= 3) {
                         filt_repd[fkeys++] = repd[k];
+                        dlen += strlen(repd[k].key) + 1;
                         repd[k] = null_pair;
                 } else {
                         free(repd[k].key);
@@ -173,8 +175,17 @@ next_word:      ;
         free(repd);
         repd = NULL;
 
-        char *out = calloc(strlen(raw), sizeof(char)); // Probably need more than that for dictionary itself.
+        size_t ln = strlen(raw) + dlen + 3;
+        char *out = calloc(ln, sizeof(char));
         char *hd = out;
+
+        for (int k = 0; k < fkeys; ++k) {
+                sprintf(hd, "%s\n", filt_repd[k].key);
+                hd += strlen(filt_repd[k].key) + 1;
+        }
+        sprintf(hd, "%c%c%c\n", 30, 30, 30);
+        hd += 4;
+
         char *w = calloc(SYMSZ, sizeof(char));
         reset_getsym();
         while ((getsym(raw, &w))) {
