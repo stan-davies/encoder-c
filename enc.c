@@ -19,6 +19,22 @@ static struct keyval null_pair = {
         .val    =       0
 };
 
+struct ll_sym {
+        char           *sym     ;       // Of length SYMSZ.
+        struct ll_sym  *next    ;
+};
+
+static struct ll_sym * create_sym(
+        char           *txt
+) {
+        // All freed in count_reps loop.
+        struct ll_sym *new = malloc(sizeof(struct ll_sym));
+        new->sym = calloc(SYMSZ, sizeof(char));
+        new->next = NULL;
+        strcpy(new->sym, txt);
+        return new;
+}
+
 static int read_raw(
         char           *fname   ,
         char          **raw
@@ -91,71 +107,75 @@ static void reset_getsym(
 
 static int scan_syms(
         char           *raw     ,
-        char         ***syms
+        struct ll_sym  *sym_root
 ) {
-        char **base = *syms;
+        struct ll_sym *tail = sym_root;
         char *sym = calloc(SYMSZ, sizeof(char));
+        int l = 0;
 
         reset_getsym();
         while (getsym(raw, &sym)) {     // Returns strlen of sym so while >0.
-                strcpy(*(*syms)++, sym);
+                if (0 == l++) {         // Increments however condition evals.
+                        strcpy(tail->sym, sym);
+                        continue;
+                }
+                tail->next = create_sym(sym);
+                tail = tail->next;
         }
 
         free(sym);
         sym = NULL;
 
-        int l = *syms - base;
-        *syms = base;
         return l;
+}
+
+static int count_reps(
+        struct ll_sym  *syms    ,
+        struct keyval **reps
+) {
+        struct ll_sym *next;
+        int keys = 0;
+        while (NULL != syms) {
+                for (int k = 0; k < keys; ++k) {
+                        if (strcmp(syms->sym, (*reps)[k].key)) {
+                                continue;
+                        }
+                        (*reps)[k].val++;
+                        goto next_word;
+                }
+
+                (*reps)[keys].key = calloc(SYMSZ, sizeof(char));
+                strcpy((*reps)[keys].key, syms->sym);
+                (*reps)[keys++].val = 1;   // Increment keys for next pair.
+
+next_word:      free(syms->sym);
+                syms->sym = NULL;
+                next = syms->next;
+                free(syms);
+                syms = next;
+        }
+
+        return keys;
 }
 
 int main(
         void
 ) {
-        char *raw;
-
+        char *raw = NULL;
         if (!read_raw("sample", &raw)) {
                 printf("Could not open file.\n");
         }
 
         // In text editor, raw text would be passed so would start from here.
 
-                // Space for 16 strings.
-        char **syms = calloc(16, sizeof(char *));
-        for (int i = 0; i < 16; ++i) {
-                // Each string 16 characters max.
-                syms[i] = calloc(SYMSZ, sizeof(char));
-        };
+        struct ll_sym *sym_root = create_sym("");
+        int symc = scan_syms(raw, sym_root);
 
-        int symc = scan_syms(raw, &syms);
-
-// Probably ought to be its own function.
         // Repititions dictionary can have, at most, is same number of keys as
         // there is words, i.e. case of no repititions.
         struct keyval *repd = calloc(symc, sizeof(struct keyval));
-        int keys = 0;
-
-        for (int i = 0; i < symc; ++i) {
-                for (int k = 0; k < keys; ++k) {
-                        if (strcmp(syms[i], repd[k].key)) {
-                                continue;
-                        }
-                        repd[k].val++;
-                        goto next_word;
-                }
-
-                repd[keys].key = calloc(SYMSZ, sizeof(char));
-                strcpy(repd[keys].key, syms[i]);
-                repd[keys++].val = 1;   // Increment keys for next pair.
-next_word:      ;
-        }
-
-        for (int i = 0; i < symc; ++i) {
-                free(syms[i]);
-                syms[i] = NULL;
-        }
-        free(syms);
-        syms = NULL;
+        int keys = count_reps(sym_root, &repd);
+        // sym_root is now freed and done with
 
         struct keyval *filt_repd = calloc(keys, sizeof(struct keyval));
         int fkeys = 0;
