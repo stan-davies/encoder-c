@@ -59,10 +59,7 @@ static void out_txt(
                 printf("Could not open file to write.\n");
                 return;
         }
-
-        // Don't like using strlen really.
         fwrite(txt, sizeof(char), strlen(txt), f);
-
         fclose(f);
 }
 
@@ -72,7 +69,7 @@ static int rawscmp(
 ) {
         char *rstr1 = calloc(strlen(str1), sizeof(char));
         int r1 = 0;
-        for (int i = 0; i < strlen(str1); ++i) {
+        for (int i = 0; i < (int)strlen(str1); ++i) {
                 if (str1[i] >= 'a' && str1[i] <= 'z') {
                         rstr1[r1++] = str1[i];
                 } else if (str1[i] >= 'A' && str1[i] <= 'Z') {
@@ -82,7 +79,7 @@ static int rawscmp(
 
         char *rstr2 = calloc(strlen(str2), sizeof(char));
         int r2 = 0;
-        for (int i = 0; i < strlen(str2); ++i) {
+        for (int i = 0; i < (int)strlen(str2); ++i) {
                 if (str2[i] >= 'a' && str2[i] <= 'z') {
                         rstr2[r2++] = str2[i];
                 } else if (str2[i] >= 'A' && str2[i] <= 'Z') {
@@ -157,6 +154,45 @@ next_word:      ;
         return keys;
 }
 
+static void replace(
+        char           *raw     ,
+        struct keyval  *dict    ,
+        int             keys    ,
+        char          **out
+) {
+        char *hd = *out;                                        // Print...
+        for (int k = 0; k < keys; ++k) {                        // ...dict
+                sprintf(hd, "%s\n", dict[k].key);
+                hd += strlen(dict[k].key) + 1;
+        }
+        sprintf(hd, "%c%c%c\n", 30, 30, 30);                    // ...delimiter
+        hd += 4;
+
+        int spc;                                                // ...encoded
+        char *w = calloc(SYMSZ, sizeof(char));
+        reset_getsym();
+        while ((getsym(raw, &w, FALSE))) {
+                for (int k = 0; k < keys; ++k) {
+                        if (rawscmp(dict[k].key, w)) {
+                                continue;
+                        }
+                        spc = (w[0] >= 'A' && w[0] <= 'Z') ? CAPPED : UNCAPPED;
+                        sprintf(hd, "%c%c ", spc, k + 1);
+                        hd += 3;
+                        goto cont;
+                }
+                sprintf(hd, "%s ", w);
+                hd += strlen(w) + 1;
+cont:           ;
+        }
+
+        *hd = '\0';     // Then strlen is so not a problem.
+        hd = NULL;      // This one is getting rid of the pointer reference.
+
+        free(w);
+        w = NULL;
+}
+
 int main(
         void
 ) {
@@ -176,9 +212,10 @@ int main(
         struct keyval *repd = calloc(symc, sizeof(struct keyval));
         int keys = count_reps(raw, &repd);
 
+// Definitely its own function.
         struct keyval *filt_repd = calloc(keys, sizeof(struct keyval));
-        int fkeys = 0;
-        int dlen = 0;
+        int fkeys = 0;  // Items in dictionary.
+        int dlen = 0;   // Characters in all of the dictionary keys.
         for (int k = 0; k < keys; ++k) {
                 if (repd[k].val >= 3) {
                         filt_repd[fkeys++] = repd[k];
@@ -194,58 +231,18 @@ int main(
         free(repd);
         repd = NULL;
 
-        size_t ln = strlen(raw) + dlen + 3;
-        char *out = calloc(ln, sizeof(char));
-        char *hd = out;
-
-// Create dictionary in bin.
-        for (int k = 0; k < fkeys; ++k) {
-                sprintf(hd, "%s\n", filt_repd[k].key);
-                hd += strlen(filt_repd[k].key) + 1;
-        }
-// Delimiter.
-        sprintf(hd, "%c%c%c\n", 30, 30, 30);
-        hd += 4;
-// Encoded text.
-        int spc;
-        char *w = calloc(SYMSZ, sizeof(char));
-        reset_getsym();
-        while ((getsym(raw, &w, FALSE))) {
-                for (int k = 0; k < fkeys; ++k) {
-                        if (rawscmp(filt_repd[k].key, w)) {
-                                continue;
-                        }
-                        spc = (w[0] >= 'A' && w[0] <= 'Z') ? CAPPED : UNCAPPED;
-                        sprintf(hd, "%c%c ", spc, k + 1);
-                        hd += 3;
-                        goto cont;
-                }
-                sprintf(hd, "%s ", w);
-                hd += strlen(w) + 1;
-cont:           ;
-        }
-
-        free(w);
-        w = NULL;
+        char *out = calloc(strlen(raw) + dlen + 4, sizeof(char));
+        replace(raw, filt_repd, fkeys, &out);
 
         out_txt(out);
 
         free(out);
-        out = hd = NULL;
-
-
-
-
-        // Will deal with capitalisation later.
-        // Also leaving out filtering for now, get working for short text
-        // first.
-
+        out = NULL;
 
         for (int k = 0; k < fkeys; ++k) {
                 free(filt_repd[k].key);
                 filt_repd[k].key = NULL;
         }
-
         free(filt_repd);
         filt_repd = NULL;
 

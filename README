@@ -3,3 +3,17 @@ vastly more efficient and cool, C program.
 
 By 'the python program' I mean my other encoder that is written in python which
 is in a different repository.
+
+---
+
+Not yet workable:
+
+- Can't cope with very long words or very large texts (just on account of
+  allocating though).
+- Haven't yet done that thing about prioritising certain word lengths and
+  ensuring maximal byte savings.
+- If a word is all caps, or has any other curious sort of structure, it would
+  just have all its personality wiped away I imagine.
+- Multi-word symbols or number-based symbols aren't part of it.
+- No decoder yet obviously lol. Should be doable in a single loop though so
+  that's neat.
