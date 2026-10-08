@@ -2,10 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define FALSE   0
-#define TRUE    1
+#define FALSE           0
+#define TRUE            1
 
-#define SYMSZ   16
+#define SYMSZ           16
+
+#define CAPPED          20
+#define UNCAPPED        30
 
 static int getsym_c = 0;
 
@@ -63,22 +66,56 @@ static void out_txt(
         fclose(f);
 }
 
+static int rawscmp(
+        char           *str1    ,
+        char           *str2
+) {
+        char *rstr1 = calloc(strlen(str1), sizeof(char));
+        int r1 = 0;
+        for (int i = 0; i < strlen(str1); ++i) {
+                if (str1[i] >= 'a' && str1[i] <= 'z') {
+                        rstr1[r1++] = str1[i];
+                } else if (str1[i] >= 'A' && str1[i] <= 'Z') {
+                        rstr1[r1++] = str1[i] + 32;
+                }
+        }
+
+        char *rstr2 = calloc(strlen(str2), sizeof(char));
+        int r2 = 0;
+        for (int i = 0; i < strlen(str2); ++i) {
+                if (str2[i] >= 'a' && str2[i] <= 'z') {
+                        rstr2[r2++] = str2[i];
+                } else if (str2[i] >= 'A' && str2[i] <= 'Z') {
+                        rstr2[r2++] = str2[i] + 32;
+                }
+        }
+
+        int res = strcmp(rstr1, rstr2);
+        free(rstr1);
+        free(rstr2);
+        rstr1 = rstr2 = NULL;
+        return res;
+}
+
 static int getsym(
         char           *raw     ,
-        char          **sym
+        char          **sym     ,
+        int             bare    // TRUE/FALSE for strip capitals and punc. or not.
 ) {
         char c;
 
         char *base = *sym;
 
-        while ((c = raw[getsym_c++])) {  // i.e. while not 0, not null-terminator
+        while ((c = raw[getsym_c++])) {  // i.e. while not '\0'
                 if (' ' == c) {
                         break;
-                } else if (c >= 'A' && c <= 'Z') {
-                        *(*sym)++ = c + 32;
-                } else if ((c >= 'a' && c <= 'z') || '-' == c) {
+                } else if (c >= 'a' && c <= 'z') {
                         *(*sym)++ = c;
-                }       // All other punctuation and numbers ignored.
+                } else if (c >= 'A' && c <= 'Z') {
+                        *(*sym)++ = c + (32 * bare);
+                } else if (!bare && ('-' == c || '.' == c || ',' == c)) {
+                        *(*sym)++ = c;
+                }
         }
         **sym = '\0';
         *sym = base;
@@ -99,7 +136,7 @@ static int count_reps(
 
         char *sym = calloc(SYMSZ, sizeof(char));
         reset_getsym();
-        while (getsym(raw, &sym)) {     // Returns strlen of sym so while >0.
+        while (getsym(raw, &sym, TRUE)) {     // Returns strlen of sym so while >0.
                 for (int k = 0; k < keys; ++k) {
                         if (strcmp(sym, (*reps)[k].key)) {
                                 continue;
@@ -170,14 +207,16 @@ int main(
         sprintf(hd, "%c%c%c\n", 30, 30, 30);
         hd += 4;
 // Encoded text.
+        int spc;
         char *w = calloc(SYMSZ, sizeof(char));
         reset_getsym();
-        while ((getsym(raw, &w))) {
+        while ((getsym(raw, &w, FALSE))) {
                 for (int k = 0; k < fkeys; ++k) {
-                        if (strcmp(filt_repd[k].key, w)) {
+                        if (rawscmp(filt_repd[k].key, w)) {
                                 continue;
                         }
-                        sprintf(hd, "%c%c ", 30, k + 1);
+                        spc = (w[0] >= 'A' && w[0] <= 'Z') ? CAPPED : UNCAPPED;
+                        sprintf(hd, "%c%c ", spc, k + 1);
                         hd += 3;
                         goto cont;
                 }
