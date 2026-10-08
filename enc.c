@@ -209,8 +209,8 @@ static void subsyms(
                                 continue;
                         }
                         spc = (w[0] >= 'A' && w[0] <= 'Z') ? CAPPED : UNCAPPED;
-                        sprintf(hd, "%c%c ", spc, k + 1);
-                        hd += 3;
+                        sprintf(hd, "%c%c%s ", spc, k + 1, w + strlen(dict[k].key));
+                        hd += 3 + strlen(w) - strlen(dict[k].key);
                         goto cont;
                 }
                 sprintf(hd, "%s ", w);
