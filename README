@@ -17,3 +17,5 @@ Not yet workable:
 - Multi-word symbols or number-based symbols aren't part of it.
 - No decoder yet obviously lol. Should be doable in a single loop though so
   that's neat.
+
+Turn the whole thing into an hc system with static struct?

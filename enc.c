@@ -22,6 +22,7 @@ static struct keyval null_pair = {
         .val    =       0
 };
 
+// Read in plaintext from file.
 static int read_raw(
         char           *fname   ,
         char          **raw
@@ -51,6 +52,7 @@ static int read_raw(
         return ln;
 }
 
+// Write encoded text to binary file.
 static void out_txt(
         char           *txt
 ) {
@@ -63,6 +65,8 @@ static void out_txt(
         fclose(f);
 }
 
+// Variation of strcmp wherein the the strings are first reduced to
+// unpunctuated, lowercase text.
 static int rawscmp(
         char           *str1    ,
         char           *str2
@@ -94,6 +98,8 @@ static int rawscmp(
         return res;
 }
 
+// Function to be run over in a loop that goes through raw and extracts words
+// into sym one at a time. Reset before each run.
 static int getsym(
         char           *raw     ,
         char          **sym     ,
@@ -119,12 +125,15 @@ static int getsym(
         return strlen(*sym);
 }
 
+// To reset the above function for next use.
 static void reset_getsym(
         void
 ) {
         getsym_c = 0;
 }
 
+// Creates a dictionary of all the words in the given plaintext where the word
+// itself is the key and the number of repititions of it is the value.
 static int count_reps(
         char           *raw     ,
         struct keyval **reps
@@ -154,7 +163,30 @@ next_word:      ;
         return keys;
 }
 
-static void replace(
+// Filter the dictionary to remove pairs with insufficient repititions.
+static int filt_reps(
+        struct keyval  *reps    ,
+        int             keys    ,
+        int            *dlen    ,
+        struct keyval **freps
+) {
+        int fkeys = 0;
+        for (int k = 0; k < keys; ++k) {
+                if (reps[k].val >= 3) {
+                        (*freps)[fkeys++] = reps[k];
+                        *dlen += strlen(reps[k].key) + 1;
+                        reps[k] = null_pair;
+                } else {
+                        free(reps[k].key);
+                        reps[k].key = NULL;
+                        reps[k] = null_pair;
+                }
+        }
+        return fkeys;
+}
+
+// Subsitute marks in place of repeated symbols.
+static void subsyms(
         char           *raw     ,
         struct keyval  *dict    ,
         int             keys    ,
@@ -203,48 +235,36 @@ int main(
 
         // In text editor, raw text would be passed so would start from here.
 
+        int keys;
+
         // How to decide how much space to allocate for dictionary? Linked list
         // too slow on searching for this, so either has to be a guess, or keep
         // reallocating, or something else... A guess for now. Probably best to
         // do a calculation based on the length of the text, then a realloc
         // just in case.
         int symc = 16;
-        struct keyval *repd = calloc(symc, sizeof(struct keyval));
-        int keys = count_reps(raw, &repd);
+        struct keyval *repdict = calloc(symc, sizeof(struct keyval));
+        keys = count_reps(raw, &repdict);
 
-// Definitely its own function.
-        struct keyval *filt_repd = calloc(keys, sizeof(struct keyval));
-        int fkeys = 0;  // Items in dictionary.
-        int dlen = 0;   // Characters in all of the dictionary keys.
-        for (int k = 0; k < keys; ++k) {
-                if (repd[k].val >= 3) {
-                        filt_repd[fkeys++] = repd[k];
-                        dlen += strlen(repd[k].key) + 1;
-                        repd[k] = null_pair;
-                } else {
-                        free(repd[k].key);
-                        repd[k].key = NULL;
-                        repd[k] = null_pair;
-                }
-        }
+        struct keyval *frepdict = calloc(keys, sizeof(struct keyval));
+        int dlen = 0;   // Cumulative length of text of each key.
+        keys = filt_reps(repdict, keys, &dlen, &frepdict);
 
-        free(repd);
-        repd = NULL;
+        free(repdict);  // Individual pairs freed in the above.
+        repdict = NULL;
 
         char *out = calloc(strlen(raw) + dlen + 4, sizeof(char));
-        replace(raw, filt_repd, fkeys, &out);
-
+        subsyms(raw, frepdict, keys, &out);
         out_txt(out);
-
         free(out);
         out = NULL;
 
-        for (int k = 0; k < fkeys; ++k) {
-                free(filt_repd[k].key);
-                filt_repd[k].key = NULL;
+        for (int k = 0; k < keys; ++k) {
+                free(frepdict[k].key);
+                frepdict[k].key = NULL;
         }
-        free(filt_repd);
-        filt_repd = NULL;
+        free(frepdict);
+        frepdict = NULL;
 
         free(raw);
         raw = NULL;
