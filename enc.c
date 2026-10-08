@@ -19,22 +19,6 @@ static struct keyval null_pair = {
         .val    =       0
 };
 
-struct ll_sym {
-        char           *sym     ;       // Of length SYMSZ.
-        struct ll_sym  *next    ;
-};
-
-static struct ll_sym * create_sym(
-        char           *txt
-) {
-        // All freed in count_reps loop.
-        struct ll_sym *new = malloc(sizeof(struct ll_sym));
-        new->sym = calloc(SYMSZ, sizeof(char));
-        new->next = NULL;
-        strcpy(new->sym, txt);
-        return new;
-}
-
 static int read_raw(
         char           *fname   ,
         char          **raw
@@ -45,6 +29,8 @@ static int read_raw(
         }
 
         fseek(f, 0, SEEK_END);  // SEEK_END maybe not supported for binary files?
+                                // Doesn't matter since won't need this
+                                // function if text is passed in.
         int ln = ftell(f) + 1;  // +1 for '\0'
         rewind(f);
 
@@ -105,39 +91,17 @@ static void reset_getsym(
         getsym_c = 0;
 }
 
-static int scan_syms(
-        char           *raw     ,
-        struct ll_sym  *sym_root
-) {
-        struct ll_sym *tail = sym_root;
-        char *sym = calloc(SYMSZ, sizeof(char));
-        int l = 0;
-
-        reset_getsym();
-        while (getsym(raw, &sym)) {     // Returns strlen of sym so while >0.
-                if (0 == l++) {         // Increments however condition evals.
-                        strcpy(tail->sym, sym);
-                        continue;
-                }
-                tail->next = create_sym(sym);
-                tail = tail->next;
-        }
-
-        free(sym);
-        sym = NULL;
-
-        return l;
-}
-
 static int count_reps(
-        struct ll_sym  *syms    ,
+        char           *raw     ,
         struct keyval **reps
 ) {
-        struct ll_sym *next;
         int keys = 0;
-        while (NULL != syms) {
+
+        char *sym = calloc(SYMSZ, sizeof(char));
+        reset_getsym();
+        while (getsym(raw, &sym)) {     // Returns strlen of sym so while >0.
                 for (int k = 0; k < keys; ++k) {
-                        if (strcmp(syms->sym, (*reps)[k].key)) {
+                        if (strcmp(sym, (*reps)[k].key)) {
                                 continue;
                         }
                         (*reps)[k].val++;
@@ -145,15 +109,13 @@ static int count_reps(
                 }
 
                 (*reps)[keys].key = calloc(SYMSZ, sizeof(char));
-                strcpy((*reps)[keys].key, syms->sym);
+                strcpy((*reps)[keys].key, sym);
                 (*reps)[keys++].val = 1;   // Increment keys for next pair.
-
-next_word:      free(syms->sym);
-                syms->sym = NULL;
-                next = syms->next;
-                free(syms);
-                syms = next;
+next_word:      ;
         }
+
+        free(sym);
+        sym = NULL;
 
         return keys;
 }
@@ -168,14 +130,14 @@ int main(
 
         // In text editor, raw text would be passed so would start from here.
 
-        struct ll_sym *sym_root = create_sym("");
-        int symc = scan_syms(raw, sym_root);
-
-        // Repititions dictionary can have, at most, is same number of keys as
-        // there is words, i.e. case of no repititions.
+        // How to decide how much space to allocate for dictionary? Linked list
+        // too slow on searching for this, so either has to be a guess, or keep
+        // reallocating, or something else... A guess for now. Probably best to
+        // do a calculation based on the length of the text, then a realloc
+        // just in case.
+        int symc = 16;
         struct keyval *repd = calloc(symc, sizeof(struct keyval));
-        int keys = count_reps(sym_root, &repd);
-        // sym_root is now freed and done with
+        int keys = count_reps(raw, &repd);
 
         struct keyval *filt_repd = calloc(keys, sizeof(struct keyval));
         int fkeys = 0;
@@ -199,13 +161,15 @@ int main(
         char *out = calloc(ln, sizeof(char));
         char *hd = out;
 
+// Create dictionary in bin.
         for (int k = 0; k < fkeys; ++k) {
                 sprintf(hd, "%s\n", filt_repd[k].key);
                 hd += strlen(filt_repd[k].key) + 1;
         }
+// Delimiter.
         sprintf(hd, "%c%c%c\n", 30, 30, 30);
         hd += 4;
-
+// Encoded text.
         char *w = calloc(SYMSZ, sizeof(char));
         reset_getsym();
         while ((getsym(raw, &w))) {
@@ -251,52 +215,3 @@ cont:           ;
 
         return 0;
 }
-        
-
-////////////////////////////////////
-/*
-
-threes = [key for key in reps if len(key) == 3 and reps[key] >= 5]
-fours  = [key for key in reps if len(key) == 4 and reps[key] >= 3]
-fives  = [key for key in reps if len(key) == 5 and reps[key] >= 3]
-long   = [key for key in reps if len(key) >= 6 and reps[key] >= 2]
-
-if len(threes) + len(fours) + len(fives) + len(long) > 256:
-        threes.sort(reverse=True, key=lambda x: reps[x])
-        if len(threes) > 256:
-                threes = threes[:256]
-        fours = [key for key in fours if reps[key] >= 6]
-        fives = [key for key in fives if reps[key] >= 4]
-        long = [key for key in long if not (len(key) < 8 and 2 == reps[key])]
-
-filtered = threes + fours + fives + long
-
-with open("enc.bin", "wb") as f:
-        for j in range(0, len(filtered)):
-                i = len(filtered) - 1 - j
-                key = f'{chr(i)}'
-                # Character with code 92 is '\' which confuses regex.
-                if 92 == i:
-                        key = '\\' + key
-
-                if i >= 256:
-                        esc = 20
-                else:
-                        esc = 30
-
-                plain = re.sub(f'{filtered[i]}', f'{chr(esc)}{key}', plain)
-                plain = re.sub(filtered[i].capitalize(), f'{chr(esc + 1)}{key}', plain)
-
-# Note that this takes the words in reverse order to the above, i.e. uses j not i.
-                f.writelines([ord(c).to_bytes(1) for c in f'{filtered[j]}\n'])
-
-        f.write(b'\x1e\x1e\x1e')        # Divider.
-        wrt = []
-        for c in plain:
-                if ord(c) >= 256:
-                        wrt.append(ord(c).to_bytes(2))
-                else:
-                        wrt.append(ord(c).to_bytes(1))
-
-        f.writelines(wrt)
-*/
