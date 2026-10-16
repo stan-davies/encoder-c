@@ -107,9 +107,9 @@ static int getsym(
         int             bare    // TRUE/FALSE for strip capitals and punc. or not.
 ) {
         char c;
-
         char *base = *sym;
 
+        // Raise some concern if c exceeds SYMSIZE? Just split in two?
         while ((c = raw[getsym_c++])) {  // i.e. while not '\0'
                 if (' ' == c) {
                         break;
@@ -117,7 +117,8 @@ static int getsym(
                         *(*sym)++ = c;
                 } else if (c >= 'A' && c <= 'Z') {
                         *(*sym)++ = c + (32 * bare);
-                } else if (!bare && ('-' == c || '.' == c || ',' == c)) {
+                } else if (!bare &&
+                           ('-' == c || '.' == c || ',' == c || '\n' == c)) {
                         *(*sym)++ = c;
                 }
         }
