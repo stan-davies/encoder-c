@@ -10,11 +10,12 @@
 #define CAPPED          20
 #define UNCAPPED        30
 
-static int getsym_c = 0;
+static int dsize        = 0;
+static int getsym_c     = 0;
 
 struct keyval {
-        char           *key     ;       // Of length SYMSZ.
-        int             val     ;
+        char           *key     ;       // Of length SYMSZ.     // 1 byte
+        int             val     ;                               // 4 bytes
 };
 
 static struct keyval null_pair = {
@@ -139,6 +140,7 @@ static int count_reps(
         struct keyval **reps
 ) {
         int keys = 0;
+        void *tmp;  // Used if reps needs reallocating.
 
         char *sym = calloc(SYMSZ, sizeof(char));
         reset_getsym();
@@ -154,10 +156,20 @@ static int count_reps(
                 (*reps)[keys].key = calloc(SYMSZ, sizeof(char));
                 strcpy((*reps)[keys].key, sym);
                 (*reps)[keys++].val = 1;   // Increment keys for next pair.
+                if (keys == dsize) {
+                        dsize += 32;
+                        tmp = realloc(*reps, dsize * sizeof(struct keyval));
+                        if (NULL == tmp) {
+                                printf("Failed to reallocate dicitonary.\n");
+                                keys = - (keys - 1);
+                                goto end;
+                        }
+                        *reps = tmp;
+                        tmp = NULL;
+                }
 next_word:      ;
         }
-
-        free(sym);
+end:    free(sym);
         sym = NULL;
 
         return keys;
@@ -178,7 +190,6 @@ static int filt_reps(
                         reps[k] = null_pair;
                 } else {
                         free(reps[k].key);
-                        reps[k].key = NULL;
                         reps[k] = null_pair;
                 }
         }
@@ -235,16 +246,13 @@ int main(
 
         // In text editor, raw text would be passed so would start from here.
 
-        int keys;
-
-        // How to decide how much space to allocate for dictionary? Linked list
-        // too slow on searching for this, so either has to be a guess, or keep
-        // reallocating, or something else... A guess for now. Probably best to
-        // do a calculation based on the length of the text, then a realloc
-        // just in case.
-        int symc = 16;
-        struct keyval *repdict = calloc(symc, sizeof(struct keyval));
-        keys = count_reps(raw, &repdict);
+        dsize = strlen(raw) / 5;        // Possibly over generous.
+        struct keyval *repdict = calloc(dsize, sizeof(struct keyval));
+        int keys = count_reps(raw, &repdict);
+        if (keys < 0) {
+                printf("Failed to scan text.\n");
+                goto count_err;
+        }
 
         struct keyval *frepdict = calloc(keys, sizeof(struct keyval));
         int dlen = 0;   // Cumulative length of text of each key.
@@ -265,6 +273,19 @@ int main(
         }
         free(frepdict);
         frepdict = NULL;
+
+        free(raw);
+        raw = NULL;
+
+        return 0;
+
+count_err:
+        for (int i = 0; i < abs(keys); ++i) {
+                free(repdict[i].key);
+                repdict[i] = null_pair;
+        }
+        free(repdict);
+        repdict = NULL;
 
         free(raw);
         raw = NULL;
