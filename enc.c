@@ -10,9 +10,6 @@
 #define CAPPED          20
 #define UNCAPPED        30
 
-static int dsize        = 0;
-static int getsym_c     = 0;
-
 struct keyval {
         char           *key     ;       // Of length SYMSZ.     // 1 byte
         int             val     ;                               // 4 bytes
@@ -21,6 +18,17 @@ struct keyval {
 static struct keyval null_pair = {
         .key    =       NULL    ,
         .val    =       0
+};
+
+// Could add repdict, freps, and associated counters to this.
+static struct {
+        int             dsize           ;       // Symbol dictionary allocated.
+        int             getsym_c        ;       // Index for func getsym.
+        char           *txt             ;       // Plaintext.
+} enc = {
+        .dsize          = 0             ,
+        .getsym_c       = 0             ,
+        .txt            = NULL
 };
 
 // Read in plaintext from file.
@@ -102,7 +110,6 @@ static int rawscmp(
 // Function to be run over in a loop that goes through raw and extracts words
 // into sym one at a time. Reset before each run.
 static int getsym(
-        char           *raw     ,
         char          **sym     ,
         int             bare    // TRUE/FALSE for strip capitals and punc. or not.
 ) {
@@ -110,7 +117,7 @@ static int getsym(
         char *base = *sym;
 
         // Raise some concern if c exceeds SYMSIZE? Just split in two?
-        while ((c = raw[getsym_c++])) {  // i.e. while not '\0'
+        while ((c = enc.txt[enc.getsym_c++])) {         // i.e. while not '\0'
                 if (' ' == c) {
                         break;
                 } else if (c >= 'a' && c <= 'z') {
@@ -131,13 +138,12 @@ static int getsym(
 static void reset_getsym(
         void
 ) {
-        getsym_c = 0;
+        enc.getsym_c = 0;
 }
 
 // Creates a dictionary of all the words in the given plaintext where the word
 // itself is the key and the number of repititions of it is the value.
 static int count_reps(
-        char           *raw     ,
         struct keyval **reps
 ) {
         int keys = 0;
@@ -145,7 +151,7 @@ static int count_reps(
 
         char *sym = calloc(SYMSZ, sizeof(char));
         reset_getsym();
-        while (getsym(raw, &sym, TRUE)) {     // Returns strlen of sym so while >0.
+        while (getsym(&sym, TRUE)) {    // Returns strlen of sym so while >0.
                 for (int k = 0; k < keys; ++k) {
                         if (strcmp(sym, (*reps)[k].key)) {
                                 continue;
@@ -157,9 +163,9 @@ static int count_reps(
                 (*reps)[keys].key = calloc(SYMSZ, sizeof(char));
                 strcpy((*reps)[keys].key, sym);
                 (*reps)[keys++].val = 1;   // Increment keys for next pair.
-                if (keys == dsize) {
-                        dsize += 32;
-                        tmp = realloc(*reps, dsize * sizeof(struct keyval));
+                if (keys == enc.dsize) {
+                        enc.dsize += 32;
+                        tmp = realloc(*reps, enc.dsize * sizeof(struct keyval));
                         if (NULL == tmp) {
                                 printf("Failed to reallocate dicitonary.\n");
                                 keys = - (keys - 1);
@@ -181,33 +187,32 @@ static int filt_reps(
         struct keyval  *reps    ,
         int             keys    ,
         int            *dlen    ,
-        struct keyval **freps
+        char         ***freps
 ) {
-        int fkeys = 0;
+        int flen = 0;
         for (int k = 0; k < keys; ++k) {
                 if (reps[k].val >= 3) {
-                        (*freps)[fkeys++] = reps[k];
-                        *dlen += strlen(reps[k].key) + 1;
+                        (*freps)[flen] = reps[k].key;  // Passing on ptr.
                         reps[k] = null_pair;
+                        *dlen += strlen((*freps)[flen++]) + 1;
                 } else {
                         free(reps[k].key);
                         reps[k] = null_pair;
                 }
         }
-        return fkeys;
+        return flen;
 }
 
 // Subsitute marks in place of repeated symbols.
 static void subsyms(
-        char           *raw     ,
-        struct keyval  *dict    ,
+        char          **syms    ,
         int             keys    ,
         char          **out
 ) {
         char *hd = *out;                                        // Print...
         for (int k = 0; k < keys; ++k) {                        // ...dict
-                sprintf(hd, "%s\n", dict[k].key);
-                hd += strlen(dict[k].key) + 1;
+                sprintf(hd, "%s\n", syms[k]);
+                hd += strlen(syms[k]) + 1;
         }
         sprintf(hd, "%c%c%c\n", 30, 30, 30);                    // ...delimiter
         hd += 4;
@@ -215,14 +220,14 @@ static void subsyms(
         int spc;                                                // ...encoded
         char *w = calloc(SYMSZ, sizeof(char));
         reset_getsym();
-        while ((getsym(raw, &w, FALSE))) {
+        while ((getsym(&w, FALSE))) {
                 for (int k = 0; k < keys; ++k) {
-                        if (rawscmp(dict[k].key, w)) {
+                        if (rawscmp(syms[k], w)) {
                                 continue;
                         }
                         spc = (w[0] >= 'A' && w[0] <= 'Z') ? CAPPED : UNCAPPED;
-                        sprintf(hd, "%c%c%s ", spc, k + 1, w + strlen(dict[k].key));
-                        hd += 3 + strlen(w) - strlen(dict[k].key);
+                        sprintf(hd, "%c%c%s ", spc, k + 1, w + strlen(syms[k]));
+                        hd += 3 + strlen(w) - strlen(syms[k]);
                         goto cont;
                 }
                 sprintf(hd, "%s ", w);
@@ -246,50 +251,52 @@ int main(
         }
 
         // In text editor, raw text would be passed so would start from here.
+        enc.txt = raw;
+        raw = NULL;
 
-        dsize = strlen(raw) / 5;        // Possibly over generous.
-        struct keyval *repdict = calloc(dsize, sizeof(struct keyval));
-        int keys = count_reps(raw, &repdict);
-        if (keys < 0) {
+        enc.dsize = strlen(enc.txt) / 5;        // Possibly over generous.
+        struct keyval *repdict = calloc(enc.dsize, sizeof(struct keyval));
+        int dlen = count_reps(&repdict);
+        if (dlen < 0) {
                 printf("Failed to scan text.\n");
                 goto count_err;
         }
 
-        struct keyval *frepdict = calloc(keys, sizeof(struct keyval));
-        int dlen = 0;   // Cumulative length of text of each key.
-        keys = filt_reps(repdict, keys, &dlen, &frepdict);
+        char **freps = calloc(dlen, sizeof(char *));
+        int dchars = 0; // Cumulative length of text of each key.
+        int flen = filt_reps(repdict, dlen, &dchars, &freps);
 
         free(repdict);  // Individual pairs freed in the above.
         repdict = NULL;
 
-        char *out = calloc(strlen(raw) + dlen + 4, sizeof(char));
-        subsyms(raw, frepdict, keys, &out);
+        char *out = calloc(strlen(enc.txt) + dchars + 4, sizeof(char));
+        subsyms(freps, flen, &out);
         out_txt(out);
         free(out);
         out = NULL;
 
-        for (int k = 0; k < keys; ++k) {
-                free(frepdict[k].key);
-                frepdict[k].key = NULL;
+        for (int k = 0; k < flen; ++k) {
+                free(freps[k]);
+                freps[k] = NULL;
         }
-        free(frepdict);
-        frepdict = NULL;
+        free(freps);
+        freps = NULL;
 
-        free(raw);
-        raw = NULL;
+        free(enc.txt);
+        enc.txt = NULL;
 
         return 0;
 
 count_err:
-        for (int i = 0; i < abs(keys); ++i) {
+        for (int i = 0; i < abs(dlen); ++i) {
                 free(repdict[i].key);
                 repdict[i] = null_pair;
         }
         free(repdict);
         repdict = NULL;
 
-        free(raw);
-        raw = NULL;
+        free(enc.txt);
+        enc.txt = NULL;
 
         return 0;
 }
