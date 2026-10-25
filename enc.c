@@ -11,8 +11,8 @@
 #define UNCAPPED        30
 
 struct keyval {
-        char           *key     ;       // Of length SYMSZ.     // 1 byte
-        int             val     ;                               // 4 bytes
+        char           *key     ;       // Of length SYMSZ.
+        int             val     ;
 };
 
 static struct keyval null_pair = {
@@ -33,8 +33,7 @@ static struct {
 
 // Read in plaintext from file.
 static int read_raw(
-        char           *fname   ,
-        char          **raw
+        char           *fname
 ) {
         FILE *f = fopen(fname, "r");
         if (!f) {
@@ -47,13 +46,13 @@ static int read_raw(
         int ln = ftell(f) + 1;  // +1 for '\0'
         rewind(f);
 
-        *raw = calloc(ln, sizeof(char));
+        enc.txt = calloc(ln, sizeof(char));
         int i = 0;
         char c;
         while (EOF != (c = fgetc(f))) {
-                (*raw)[i++] = c;
+                enc.txt[i++] = c;
         }
-        (*raw)[i] = '\0';
+        enc.txt[i] = '\0';
 
         fclose(f);
         f = NULL;
@@ -120,12 +119,16 @@ static int getsym(
         while ((c = enc.txt[enc.getsym_c++])) {         // i.e. while not '\0'
                 if (' ' == c) {
                         break;
+                } else if ('\n' == c) {
+                        if (!bare) {
+                                *(*sym)++ = c;
+                        }
+                        break;  // How to account for double \n?
                 } else if (c >= 'a' && c <= 'z') {
                         *(*sym)++ = c;
                 } else if (c >= 'A' && c <= 'Z') {
                         *(*sym)++ = c + (32 * bare);
-                } else if (!bare &&
-                           ('-' == c || '.' == c || ',' == c || '\n' == c)) {
+                } else if (!bare && ('-' == c || '.' == c || ',' == c)) {
                         *(*sym)++ = c;
                 }
         }
@@ -182,6 +185,16 @@ end:    free(sym);
         return keys;
 }
 
+// Determine if given symbol is worth encoding.
+static int enc_check(
+        struct keyval   sym
+) {
+        int klen = strlen(sym.key);
+        return (klen >= 3 && sym.val >= 5)
+            || (klen >= 4 && sym.val >= 3)
+            || (klen >= 6 && sym.val >= 2);
+}
+
 // Filter the dictionary to remove pairs with insufficient repititions.
 static int filt_reps(
         struct keyval  *reps    ,
@@ -191,7 +204,7 @@ static int filt_reps(
 ) {
         int flen = 0;
         for (int k = 0; k < keys; ++k) {
-                if (reps[k].val >= 3) {
+                if (enc_check(reps[k])) {
                         (*freps)[flen] = reps[k].key;  // Passing on ptr.
                         reps[k] = null_pair;
                         *dlen += strlen((*freps)[flen++]) + 1;
@@ -245,14 +258,10 @@ cont:           ;
 int main(
         void
 ) {
-        char *raw = NULL;
-        if (!read_raw("sample", &raw)) {
+        if (!read_raw("sample")) {
                 printf("Could not open file.\n");
+                return 1;
         }
-
-        // In text editor, raw text would be passed so would start from here.
-        enc.txt = raw;
-        raw = NULL;
 
         enc.dsize = strlen(enc.txt) / 5;        // Possibly over generous.
         struct keyval *repdict = calloc(enc.dsize, sizeof(struct keyval));
@@ -298,5 +307,5 @@ count_err:
         free(enc.txt);
         enc.txt = NULL;
 
-        return 0;
+        return 1;
 }
