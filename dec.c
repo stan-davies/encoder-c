@@ -83,8 +83,11 @@ int decode(
                         dict[dci] = calloc(16, sizeof(char));
                         strcpy(dict[dci++], sym);
                 } else {
-                        if ('\x1e'  == sym[0] || '\x14' == sym[0]) {
+                        if ('\x1e'  == sym[0]) {
                                 fprintf(out, "%s ", dict[sym[1] - 1]);
+                        } else if ('\x14' == sym[0]) {
+                                fprintf(out, "%c%s ", dict[sym[1] - 1][0] - 32,
+                                                (dict[sym[1] - 1]) + 1);
                         } else {
                                 fprintf(out, "%s ", sym);
                         }
