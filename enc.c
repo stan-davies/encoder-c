@@ -119,16 +119,11 @@ static int getsym(
         while ((c = enc.txt[enc.getsym_c++])) {         // i.e. while not '\0'
                 if (' ' == c) {
                         break;
-                } else if ('\n' == c) {
-                        if (!bare) {
-                                *(*sym)++ = c;
-                        }
-                        break;  // How to account for double \n?
                 } else if (c >= 'a' && c <= 'z') {
                         *(*sym)++ = c;
                 } else if (c >= 'A' && c <= 'Z') {
                         *(*sym)++ = c + (32 * bare);
-                } else if (!bare && ('-' == c || '.' == c || ',' == c)) {
+                } else if (!bare && ('-' == c || '.' == c || ',' == c || '\n' == c)) {
                         *(*sym)++ = c;
                 }
         }
@@ -255,7 +250,7 @@ cont:           ;
         w = NULL;
 }
 
-int main(
+int encode(
         void
 ) {
         if (!read_raw("sample")) {

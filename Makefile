@@ -1,7 +1,7 @@
 CMD = gcc
-SRC = enc.c
+SRC = control.c enc.c dec.c
 OBJ = $(SRC:.c=.o)
-OUT = enc
+OUT = dbm
 WRN = -Wall -Wpedantic -Wextra
 
 all : ${OBJ}
