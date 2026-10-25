@@ -1,6 +1,6 @@
 *.py
 *.o
-enc
+dbm
 sample
 enc.bin
 decoded
