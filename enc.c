@@ -1,14 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#define FALSE           0
-#define TRUE            1
-
-#define SYMSZ           16
-
-#define CAPPED          20
-#define UNCAPPED        30
+#include "util.h"
 
 struct keyval {
         char           *key     ;       // Of length SYMSZ.
@@ -117,9 +107,7 @@ static int getsym(
 
         // Raise some concern if c exceeds SYMSIZE? Just split in two?
         while ((c = enc.txt[enc.getsym_c++])) {         // i.e. while not '\0'
-                if (' ' == c) {
-                        break;
-                } else if ('\n' == c) {
+                if (' ' == c ||'\n' == c) {
                         if (!bare) {
                                 *(*sym)++ = c;
                         }
@@ -229,7 +217,7 @@ static void subsyms(
                 sprintf(hd, "%s\n", syms[k]);
                 hd += strlen(syms[k]) + 1;
         }
-        sprintf(hd, "%c%c%c\n", 30, 30, 30);                    // ...delimiter
+        sprintf(hd, "%s\n", DICTSEP);                           // ...delimiter
         hd += 4;
 
         int spc;                                                // ...encoded
@@ -240,13 +228,13 @@ static void subsyms(
                         if (rawscmp(syms[k], w)) {
                                 continue;
                         }
-                        spc = (w[0] >= 'A' && w[0] <= 'Z') ? CAPPED : UNCAPPED;
-                        sprintf(hd, "%c%c%s ", spc, k + 1, w + strlen(syms[k]));
-                        hd += 3 + strlen(w) - strlen(syms[k]);
+                        spc = (w[0] >= 'A' && w[0] <= 'Z') ? CAPPED_C : UNCAPPED_C;
+                        sprintf(hd, "%c%c%s", spc, k + 1, w + strlen(syms[k]));
+                        hd += 2 + strlen(w) - strlen(syms[k]);
                         goto cont;
                 }
-                sprintf(hd, "%s ", w);
-                hd += strlen(w) + 1;
+                sprintf(hd, "%s", w);
+                hd += strlen(w);
 cont:           ;
         }
 

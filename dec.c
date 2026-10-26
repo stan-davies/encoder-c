@@ -1,13 +1,4 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-
-#define FALSE           0
-#define TRUE            1
-
-// Read in file as binary.
-// Split on the divider.
-// Split dictionary on newlines, creating array of substitutions.
+#include "util.h"
 
 static int read_enc(
         char           *fname   ,
@@ -38,16 +29,15 @@ static int read_enc(
 
 static int getsym(
         char           *raw     ,
-        char          **sym     ,
-        char            delim
+        char          **sym
 ) {
         static int i = 0;
 
         char *base = *sym;
         char c;
-        while (delim != (c = raw[i++]) && '\0' != c) {
-                *(*sym)++ = c;
-        }
+        do {
+                *(*sym)++ = (c = raw[i++]);
+        } while ('\n' != c && '\0' != c && ' ' != c);
         **sym = '\0';
         *sym = base;
         return strlen(*sym);
@@ -68,44 +58,63 @@ int decode(
         if (!out) {
                 printf("Could not open output file.\n");
                 rt = 1;
-                goto error;
+                goto error1;
         }
-
-        // Insert dictionary length in file?
-        char **dict = calloc(16, sizeof(char *));
-        int dci = 0;
 
         char *sym = calloc(128, sizeof(char));
         int slen;
-        char delim = '\n';
-        while (0 < (slen = getsym(raw, &sym, delim))) {
-                if ('\n' == delim) {
-                        dict[dci] = calloc(16, sizeof(char));
-                        strcpy(dict[dci++], sym);
+
+        slen = getsym(raw, &sym);       // Get dictionary length.
+        int dlen = atoi(sym);
+        if (dlen <= 0) {
+                printf("Failed to read dictionary length.\n");
+                rt = 1;
+                goto error2;
+        }
+
+        char **dict = calloc(dlen, sizeof(char *));
+        int dci = 0;
+        int readdict = TRUE;
+
+        while (0 < (slen = getsym(raw, &sym))) {
+                if (readdict) {
+                        if (0 == strcmp(sym, DICTSEP "\n")) {
+                                readdict = FALSE;
+                                continue;
+                        }
+
+                        dict[dci] = calloc(SYMSZ, sizeof(char));
+                        strcpy(dict[dci], sym);
+                        dict[dci++][slen - 1] = '\0';   // Shave off '\n'.
                 } else {
-                        if ('\x1e'  == sym[0]) {
-                                fprintf(out, "%s ", dict[sym[1] - 1]);
-                        } else if ('\x14' == sym[0]) {
-                                fprintf(out, "%c%s ", dict[sym[1] - 1][0] - 32,
-                                                (dict[sym[1] - 1]) + 1);
+                        if (UNCAPPED_C  == sym[0]) {
+// Assumes all symbols are 2 bytes (they are, unless I added multi-byte
+// extensions for large files).
+                                fprintf(out, "%s%s", dict[sym[1] - 1], sym + 2);
+                        } else if (CAPPED_C == sym[0]) {
+                                fprintf(out, "%c%s%s", dict[sym[1] - 1][0] - 32,
+                                                (dict[sym[1] - 1]) + 1,
+                                                sym + 2);
                         } else {
-                                fprintf(out, "%s ", sym);
+                                fprintf(out, "%s", sym);
                         }
                 }
-
-                if (0 == strcmp(sym, "\x1e\x1e\x1e")) {
-                        delim = ' ';
-                }
         }
-        fprintf(out, "\n");
-
-        free(sym);
-        sym = NULL;
 
         fclose(out);
         out = NULL;
 
-error:  free(raw);
+        for (int i = 0; i < dlen; ++i) {
+                free(dict[i]);
+                dict[i] = NULL;
+        }
+        free(dict);
+        dict = NULL;
+
+error2: free(sym);
+        sym = NULL;
+
+error1: free(raw);
         raw = NULL;
 
         return rt;
