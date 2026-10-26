@@ -12,4 +12,4 @@ Not yet added:
   just have all its personality wiped away I imagine.
 - Multi-word symbols or number-based symbols aren't part of it.
 - May well struggle with large texts still.
-- Some weird newline stuff going on with the encoder.
+- Possibly add the dictionary length to the encoded text file?

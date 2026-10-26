@@ -119,11 +119,16 @@ static int getsym(
         while ((c = enc.txt[enc.getsym_c++])) {         // i.e. while not '\0'
                 if (' ' == c) {
                         break;
+                } else if ('\n' == c) {
+                        if (!bare) {
+                                *(*sym)++ = c;
+                        }
+                        break;
                 } else if (c >= 'a' && c <= 'z') {
                         *(*sym)++ = c;
                 } else if (c >= 'A' && c <= 'Z') {
                         *(*sym)++ = c + (32 * bare);
-                } else if (!bare && ('-' == c || '.' == c || ',' == c || '\n' == c)) {
+                } else if (!bare && ('-' == c || '.' == c || ',' == c)) {
                         *(*sym)++ = c;
                 }
         }
@@ -218,6 +223,8 @@ static void subsyms(
         char          **out
 ) {
         char *hd = *out;                                        // Print...
+        sprintf(hd, "%d\n", keys);
+        hd += strlen(hd);
         for (int k = 0; k < keys; ++k) {                        // ...dict
                 sprintf(hd, "%s\n", syms[k]);
                 hd += strlen(syms[k]) + 1;
@@ -273,6 +280,7 @@ int encode(
         free(repdict);  // Individual pairs freed in the above.
         repdict = NULL;
 
+                // +4 for divider, +4 more for dictionary length data
         char *out = calloc(strlen(enc.txt) + dchars + 4, sizeof(char));
         subsyms(freps, flen, &out);
         out_txt(out);
